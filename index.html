@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Touch Tilt FM Synth (Low Latency)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      touch-action: none;
+      background: black;
+      color: lime;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    #xy-pad {
+      border: 2px solid lime;
+      width: 90vw;
+      height: 70vh;
+      touch-action: none;
+      background: #111;
+      position: relative;
+    }
+    .dot {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: lime;
+      border-radius: 50%;
+      transform: translate(-10px, -10px);
+      pointer-events: none;
+    }
+    input[type="range"] {
+      width: 200px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎛 Touch + Tilt FM Synth 🎛</h2>
+
+  <div id="starter" style="text-align:center; padding:20px;">
+    <button id="startAllBtn" style="padding: 16px 24px; font-size: 1.2em; border-radius: 8px;">▶️ Start Synth + Tilt</button>
+    <p id="status" style="margin-top: 10px;">Waiting to start synth...</p>
+
+    <div style="margin-top: 20px;">
+      <label for="releaseSlider">Fast / Slow:</label>
+      <input id="releaseSlider" type="range" min="0.01" max="0.3" step="0.01" value="0.2" />
+      <span id="releaseValue">0.20</span>s
+    </div>
+  </div>
+
+  <div id="xy-pad"></div>
+
+  <script type="module">
+    const pad = document.getElementById("xy-pad");
+    const touches = new Map();
+    const voiceMap = {};
+    let touchTimeout;
+
+    const startAllBtn = document.getElementById("startAllBtn");
+    const statusText = document.getElementById("status");
+    const releaseSlider = document.getElementById("releaseSlider");
+    const releaseValue = document.getElementById("releaseValue");
+
+    let csound;
+    let instrumentOn = false;
+
+    async function requestMicrophoneAccess() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Microphone access granted");
+      } catch (err) {
+        alert("Microphone access is required for sound to work.");
+        console.error("Microphone access denied:", err);
+      }
+    }
+
+    async function initCsound() {
+      await requestMicrophoneAccess();
+      const { Csound } = await import('./js/csound.js');
+      csound = await Csound();
+
+      await csound.setOption("-odac");
+      await csound.setOption("-b64");
+      await csound.setOption("-B256");
+
+      await csound.compileOrc(`
+        sr = 48000
+        ksmps = 8
+        nchnls = 2
+        0dbfs = 1
+
+        instr 1
+          krelease chnget "releaseTime"
+
+          kamp1 = portk(chnget:k("amp1"), krelease)
+          kfreq1 = portk(chnget:k("freq1"), krelease)
+          kamp2 = portk(chnget:k("amp2"), krelease)
+          kfreq2 = portk(chnget:k("freq2"), krelease)
+          kamp3 = portk(chnget:k("amp3"), krelease)
+          kfreq3 = portk(chnget:k("freq3"), krelease)
+
+          kfmRatio = portk(chnget:k("fmRatio"), krelease)
+
+          kfmFreq1 = kfreq1 * kfmRatio
+          kfmFreq2 = kfreq2 * kfmRatio
+          kfmFreq3 = kfreq3 * kfmRatio
+
+          kfmIndex = portk(chnget:k("fmIndex"), krelease)
+
+          amod1 oscili kfmIndex * kfmFreq1, kfmFreq1
+          acar1 oscili kamp1, kfreq1 + amod1
+
+          amod2 oscili kfmIndex * kfmFreq2, kfmFreq2
+          acar2 oscili kamp2, kfreq2 + amod2
+
+          amod3 oscili kfmIndex * kfmFreq3, kfmFreq3
+          acar3 oscili kamp3, kfreq3 + amod3
+
+          apan1 random 0, 1
+          apan2 random 0, 1
+          apan3 random 0, 1
+
+          aleft = acar1 * apan1 + acar2 * apan2 + acar3 * apan3
+          aright = acar1 * (1 - apan1) + acar2 * (1 - apan2) + acar3 * (1 - apan3)
+
+          outs aleft * 0.3, aright * 0.3
+        endin
+      `);
+      await csound.start();
+      await startInstrument();
+      const initialRelease = parseFloat(releaseSlider.value);
+      csound.setControlChannel("releaseTime", initialRelease);
+    }
+
+    async function startInstrument() {
+      if (!instrumentOn && csound) {
+        await csound.inputMessage("i1 0 -1");
+        instrumentOn = true;
+      }
+    }
+
+    async function stopInstrument() {
+      if (instrumentOn && csound) {
+        await csound.inputMessage("i-1 0 1");
+        instrumentOn = false;
+      }
+    }
+
+    function getVoiceId(touchId) {
+      if (!(touchId in voiceMap)) {
+        const used = Object.values(voiceMap);
+        for (let i = 1; i <= 3; i++) {
+          if (!used.includes(i)) {
+            voiceMap[touchId] = i;
+            break;
+          }
+        }
+      }
+      return voiceMap[touchId];
+    }
+
+    startAllBtn.addEventListener("click", async () => {
+      if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+        try {
+          const response = await DeviceOrientationEvent.requestPermission();
+          if (response === 'granted') {
+            window.addEventListener('deviceorientation', handleTilt);
+            console.log("Tilt permission granted");
+          } else {
+            alert("Tilt permission denied");
+          }
+        } catch (err) {
+          alert("Failed to request tilt permission");
+          console.error(err);
+        }
+      } else {
+        window.addEventListener('deviceorientation', handleTilt);
+        console.log("No permission request needed");
+      }
+
+      if (!csound) await initCsound();
+      window.synthReady = true;
+
+      statusText.innerText = "Synth is running. Touch screen + tilt to play.";
+      startAllBtn.style.display = "none";
+    });
+
+    releaseSlider.addEventListener("input", () => {
+      const value = parseFloat(releaseSlider.value);
+      releaseValue.innerText = value.toFixed(2);
+      if (csound) {
+        csound.setControlChannel("releaseTime", value);
+      }
+    });
+
+    pad.addEventListener("touchstart", handleTouch);
+    pad.addEventListener("touchmove", handleTouch);
+    pad.addEventListener("touchend", handleTouchEnd);
+
+    function handleTouch(e) {
+      e.preventDefault();
+      if (!window.synthReady) return;
+      startInstrument();
+
+      for (let t of e.touches) {
+        const rect = pad.getBoundingClientRect();
+        const x = (t.clientX - rect.left) / rect.width;
+        const y = (t.clientY - rect.top) / rect.height;
+
+        const scale = [293.66, 329.63, 349.23, 392.0, 440.0, 523.25, 587.33, 659.25, 698.46, 783.99, 880.0, 987.77, 1174.66];
+        const index = Math.floor((1 - y) * (scale.length - 1));
+        const freq = scale[Math.max(0, Math.min(index, scale.length - 1))];
+        const amp = x;
+
+        const voice = getVoiceId(t.identifier);
+        csound.setControlChannel(`amp${voice}`, amp);
+        csound.setControlChannel(`freq${voice}`, freq);
+      }
+    }
+
+    function handleTouchEnd(e) {
+      for (let t of e.changedTouches) {
+        const voice = getVoiceId(t.identifier);
+        if (voice) {
+          csound.setControlChannel(`amp${voice}`, 0);
+          delete voiceMap[t.identifier];
+        }
+      }
+
+      if (Object.keys(voiceMap).length === 0) {
+        clearTimeout(touchTimeout);
+        touchTimeout = setTimeout(() => {
+          if (Object.keys(voiceMap).length === 0) {
+            stopInstrument();
+          }
+        }, 6000);
+      }
+    }
+
+   function handleTilt(e) {
+      const beta = e.beta || 0;
+      const gamma = e.gamma || 0;
+
+      const gammaNorm = Math.abs(gamma) / 90; // side-to-side
+      const betaNorm = (beta + 90) / 180;     // forward-backward
+
+      const fmIndex = gammaNorm * 0.8;        // left-right tilt → modulation amount
+      const ratios = [0.5, 1, 1.5, 2, 3, 4];
+      const index = Math.floor(betaNorm * ratios.length);
+      const fmRatio = ratios[Math.min(index, ratios.length - 1)];     // forward-back tilt → mod:carrier ratio
+
+      csound?.setControlChannel("fmIndex", fmIndex);
+      csound?.setControlChannel("fmRatio", fmRatio);
+    }
+  </script>
+
+</body>
+</html>
