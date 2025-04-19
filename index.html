@@ -245,20 +245,22 @@
     }
 
    function handleTilt(e) {
-      const beta = e.beta || 0;
-      const gamma = e.gamma || 0;
+  const beta = e.beta || 0;
+  const gamma = e.gamma || 0;
 
-      const gammaNorm = Math.abs(gamma) / 90; // side-to-side
-      const betaNorm = (beta + 90) / 180;     // forward-backward
+  const gammaNorm = Math.abs(gamma) / 90;
+  const betaNorm = (beta + 90) / 180;
+  const clampedBeta = Math.max(0, Math.min(betaNorm, 0.999));
 
-      const fmIndex = gammaNorm * 0.8;        // left-right tilt → modulation amount
-      const ratios = [0.5, 1, 1.5, 2, 3, 4];
-      const index = Math.floor(betaNorm * ratios.length);
-      const fmRatio = ratios[Math.min(index, ratios.length - 1)];     // forward-back tilt → mod:carrier ratio
+  const fmIndex = gammaNorm * 0.8;
+  const ratios = [0.5, 1, 1.5, 2, 3, 4];
+  const index = Math.floor(clampedBeta * ratios.length);
+  const fmRatio = ratios[index];
 
-      csound?.setControlChannel("fmIndex", fmIndex);
-      csound?.setControlChannel("fmRatio", fmRatio);
-    }
+  csound?.setControlChannel("fmIndex", fmIndex);
+  csound?.setControlChannel("fmRatio", fmRatio);
+}
+
   </script>
 
 </body>
