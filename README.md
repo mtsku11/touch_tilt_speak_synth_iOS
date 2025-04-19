@@ -105,6 +105,3 @@ csound.setControlChannel("fmIndex", 0.5)
 ## Conclusion
 This app showcases a full-featured, mobile-first FM synth powered by WebAssembly and gesture input. You can touch and tilt to explore harmonics, motion-based modulation, and spatial sound. It's a minimal but expressive interface for exploring interactive audio in the browser.
 
----
-
-**Happy tilting and tweaking! 🎛️📱**
