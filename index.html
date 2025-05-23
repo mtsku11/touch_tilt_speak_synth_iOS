@@ -193,12 +193,9 @@
       return voiceMap[touchId];
     }
 
-<<<<<<< HEAD
      startAllBtn.addEventListener("click", async () => {
-=======
     // start everything on button click
     startAllBtn.addEventListener("click", async () => {
->>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         try {
           const response = await DeviceOrientationEvent.requestPermission();
@@ -244,11 +241,8 @@
      }
     });
 
-<<<<<<< HEAD
 
-=======
     // touch listeners
->>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
     pad.addEventListener("touchstart", handleTouch);
     pad.addEventListener("touchmove", handleTouch);
     pad.addEventListener("touchend", handleTouchEnd);
@@ -295,16 +289,13 @@
       }
     }
 
-<<<<<<< HEAD
    function handleTilt(e) {
     const beta = e.beta || 0;
     const gamma = e.gamma || 0;
-=======
     // handle device tilt
   function handleTilt(e) {
   const beta = e.beta || 0;
   const gamma = e.gamma || 0;
->>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
 
     const gammaNorm = Math.abs(gamma) / 90;
     const betaNorm = (beta + 90) / 180;
