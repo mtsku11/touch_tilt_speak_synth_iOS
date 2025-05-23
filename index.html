@@ -67,6 +67,8 @@
   <div id="xy-pad"></div>
 
   <script type="module">
+
+    //get UI elements
     const pad = document.getElementById("xy-pad");
     const touches = new Map();
     const voiceMap = {};
@@ -80,6 +82,7 @@
     let csound;
     let instrumentOn = false;
 
+    // request microphone permission
     async function requestMicrophoneAccess() {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -90,6 +93,7 @@
       }
     }
 
+    // initialize csound
     async function initCsound() {
       await requestMicrophoneAccess();
       const { Csound } = await import('./js/csound.js');
@@ -100,6 +104,7 @@
       await csound.setOption("-b64");
       await csound.setOption("-B256");
 
+      // compile csound
       await csound.compileOrc(`
         sr = 48000
         ksmps = 8
@@ -149,6 +154,7 @@
 
         endin
       `);
+
       await csound.start();
       await startInstrument();
       const initialRelease = parseFloat(releaseSlider.value);
@@ -157,6 +163,7 @@
 
     }
 
+    // start synth
     async function startInstrument() {
       if (!instrumentOn && csound) {
         await csound.inputMessage("i1 0 -1");
@@ -164,6 +171,7 @@
       }
     }
 
+    // stop synth
     async function stopInstrument() {
       if (instrumentOn && csound) {
         await csound.inputMessage("i-1 0 1");
@@ -171,6 +179,7 @@
       }
     }
 
+    // assign touch to voice
     function getVoiceId(touchId) {
       if (!(touchId in voiceMap)) {
         const used = Object.values(voiceMap);
@@ -184,7 +193,12 @@
       return voiceMap[touchId];
     }
 
+<<<<<<< HEAD
      startAllBtn.addEventListener("click", async () => {
+=======
+    // start everything on button click
+    startAllBtn.addEventListener("click", async () => {
+>>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         try {
           const response = await DeviceOrientationEvent.requestPermission();
@@ -210,6 +224,7 @@
       startAllBtn.style.display = "none";
     });
 
+    // update release time live
     releaseSlider.addEventListener("input", () => {
       const value = parseFloat(releaseSlider.value);
       releaseValue.innerText = value.toFixed(2);
@@ -229,11 +244,16 @@
      }
     });
 
+<<<<<<< HEAD
 
+=======
+    // touch listeners
+>>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
     pad.addEventListener("touchstart", handleTouch);
     pad.addEventListener("touchmove", handleTouch);
     pad.addEventListener("touchend", handleTouchEnd);
 
+    // handle touch movement
     function handleTouch(e) {
       e.preventDefault();
       if (!window.synthReady) return;
@@ -255,6 +275,7 @@
       }
     }
 
+    // handle touch end
     function handleTouchEnd(e) {
       for (let t of e.changedTouches) {
         const voice = getVoiceId(t.identifier);
@@ -274,9 +295,16 @@
       }
     }
 
+<<<<<<< HEAD
    function handleTilt(e) {
     const beta = e.beta || 0;
     const gamma = e.gamma || 0;
+=======
+    // handle device tilt
+  function handleTilt(e) {
+  const beta = e.beta || 0;
+  const gamma = e.gamma || 0;
+>>>>>>> a1e9a63aa948fb724fb0b7c63ea0f4f4784f6fcf
 
     const gammaNorm = Math.abs(gamma) / 90;
     const betaNorm = (beta + 90) / 180;
