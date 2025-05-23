@@ -1,107 +1,171 @@
+# README: Touch Tilt Speak FM Synth
 
-# Touch + Tilt FM Synth
+## Overview
 
-This example demonstrates how to use touch and tilt controls in a web browser to manipulate a polyphonic FM synthesizer, using Csound running in WebAssembly (WASM).
+This is a web-based FM synthesizer built with HTML/CSS for UI, JavaScript for interaction and control, and Csound (compiled to WebAssembly via `csound.js`) as the audio engine. The user interacts through touch, tilt (accelerometer), and voice input, creating a unique multi-modal musical interface.
 
-## Goals
-This project integrates real-time touch interaction and motion sensors to control a three-voice FM synth:
+## HTML
 
-1. Load and initialize the Csound WASM engine  
-2. Compile a polyphonic FM synthesis instrument  
-3. Handle multitouch input to control pitch and amplitude  
-4. Use device tilt (via DeviceOrientation) to modulate FM depth and ratio  
-5. Add stereo random panning to spatialize the voices  
+The HTML provides the structure and interface of the app:
 
-## CsoundObj API Usage
-This app uses the following CsoundObj methods:
+### Key Elements:
 
-1. `Csound()` – Create a new Csound engine object  
-2. `.setOption()` – Configure real-time audio and buffer sizes  
-3. `.compileOrc()` – Compile FM synth instrument code  
-4. `.start()` – Start the audio engine  
-5. `.inputMessage()` – Schedule a persistent instrument (`i1 0 -1`)  
-6. `.setControlChannel()` – Dynamically control FM parameters  
+* `<h2>`, `<p>`: UI text headers and prompts.
+* `<button id="startAllBtn">`: Starts the synthesizer and requests device permissions (microphone, orientation).
+* `<input type="range">`: Sliders for `releaseTime` and `vocoderMix`, controlling envelope speed and morph mix ratio.
+* `<div id="xy-pad">`: Interactive pad where touch X/Y determines amplitude and frequency of voices.
 
-## JavaScript Overview
-All application logic is contained in the `<script type="module">` section of `index.html`. No external build tools or frameworks are required. This includes:
+### Fast / Slow Slider:
 
-- Asynchronous initialization of Csound  
-- UI event listeners for touch and slider inputs  
-- Motion permission and sensor event handling  
+* `releaseSlider` adjusts the `releaseTime` in the Csound engine, affecting portamento (smoothing of parameter changes).
 
-### Touch Handling
-```javascript
-pad.addEventListener("touchstart", handleTouch);
-pad.addEventListener("touchmove", handleTouch);
-pad.addEventListener("touchend", handleTouchEnd);
+### Vocoder Mix Slider:
+
+* `vocoderMixSlider` sets a blend between the raw FM sound and the vocoded voice input using Csound's `pvsfilter`.
+
+## CSS
+
+Styles the UI with a retro synth aesthetic (black background, lime green monospace text).
+
+### Highlights:
+
+* `#xy-pad`: Bordered interactive area for touch input.
+* `input[type="range"]`: Consistent slider width and alignment.
+* `body`: Uses flexbox to center and align all elements vertically.
+
+## JavaScript
+
+Acts as the glue connecting the UI to the Csound WASM engine.
+
+### Initialization Flow:
+
+1. On click of `#startAllBtn`:
+
+   * Requests microphone access.
+   * Requests device orientation access (for tilt controls).
+   * Loads `csound.js` (a wrapper around the Csound WebAssembly engine).
+   * Initializes the Csound engine and starts the instrument.
+
+### Csound Interaction:
+
+* Sets control channels: `releaseTime`, `vocoderMix`, `ampN`, `freqN`, `fmIndex`, `fmRatio`.
+* Handles touch to determine which "voice" is played, assigning touch IDs to three available voices.
+* Tilt controls modify:
+
+  * `fmIndex`: Modulation index (how intense FM modulation is).
+  * `fmRatio`: Ratio between modulator and carrier frequencies.
+
+## Csound (within JavaScript `csound.compileOrc(...)`)
+
+This is the core audio engine, written in the Csound orchestral language, compiled to WebAssembly via `csound.js`.
+
+### Block-by-Block Breakdown:
+
+```csound
+sr = 48000
+ksmps = 8
+nchnls = 2
+0dbfs = 1
 ```
-Each touch is mapped to a fixed musical scale (Y axis → pitch) and X axis (amplitude). Touches are assigned to one of three voices. When the touch ends, the corresponding amplitude fades out smoothly via `portk()`.
 
-### Tilt Mapping
-```javascript
-const gammaNorm = Math.abs(gamma) / 90;
-const betaNorm = (beta + 90) / 180;
-const fmIndex = gammaNorm * 0.8;
-const ratios = [0.5, 1, 1.5, 2, 3, 4];
-const fmRatio = ratios[Math.min(Math.floor(betaNorm * ratios.length), ratios.length - 1)];
-```
-- Gamma (left/right tilt) controls FM **index**  
-- Beta (forward/backward tilt) selects one of several musical FM **ratios**  
+* Standard Csound setup for:
 
-### Csound Instrument
+  * Sample rate (48 kHz),
+  * k-cycle size (`ksmps = 8`),
+  * Stereo output,
+  * Normalized audio (0dB = 1.0 amplitude).
+
 ```csound
 instr 1
-  kamp1 = portk(chnget:k("amp1"), krelease)
-  kfreq1 = chnget:k("freq1")
-  ...
-  kfmRatio = portk(chnget:k("fmRatio"), 0.1)
-  kfmFreq1 = kfreq1 * kfmRatio
-  ...
-  amod1 oscili kfmIndex * kfmFreq1, kfmFreq1
-  acar1 oscili kamp1, kfreq1 + amod1
 ```
-The modulation frequency is dynamically linked to the carrier: `modFreq = carrier * ratio`, ensuring harmonic overtones. Three identical voices are mixed together.
 
-### Stereo Panning
+* Defines Instrument 1, which stays on and processes continuously.
+
+### Control Channels:
+
 ```csound
-apan1 random 0, 1
-aleft = acar1 * apan1
-aright = acar1 * (1 - apan1)
-```
-Each voice is randomly panned across the stereo field on each reinitialization. Voices are mixed and scaled to prevent clipping.
-
-## HTML Layout
-```html
-<div id="starter">
-  <button id="startAllBtn">▶️ Start Synth + Tilt</button>
-  <input id="releaseSlider" type="range" min="0.01" max="0.3" />
-</div>
-<div id="xy-pad"></div>
-```
-A button starts the synth and requests motion permissions. A slider controls the release smoothing time for amplitude changes.
-
-## Permissions
-iOS requires:
-- **User gesture** to enable motion sensing (via `DeviceOrientationEvent.requestPermission()`)  
-- **HTTPS origin** for both motion and microphone access  
-
-These are handled as soon as the user presses the start button.
-
-## Deployment
-You can host this app as a static website:
-
-### GitHub Pages
-1. Push your files to a new repo  
-2. Go to **Settings > Pages** and choose the main branch root  
-3. Visit `https://your-username.github.io/your-repo-name`  
-
-## Testing & Debugging
-Open the browser console to test real-time values and issue direct Csound messages:
-```js
-csound.inputMessage("i1 0 1")
-csound.setControlChannel("fmIndex", 0.5)
+krelease chnget "releaseTime"
+kmix chnget "vocoderMix"
 ```
 
-## Conclusion
-This app showcases a full-featured, mobile-first FM synth powered by WebAssembly and gesture input. You can touch and tilt to explore harmonics, motion-based modulation, and spatial sound. It's a minimal but expressive interface for exploring interactive audio in the browser.
+* `chnget`: Reads values from named control channels set by JavaScript sliders.
+
+### FM Synth Voice Definitions:
+
+```csound
+kamp1 = portk(chnget:k("amp1"), krelease)
+kfreq1 = portk(chnget:k("freq1"), krelease)
+...
+```
+
+* Smooths abrupt parameter changes using `portk` (controlled by `releaseTime`).
+* Reads amplitude and frequency for each of the 3 FM voices.
+
+### FM Modulation:
+
+```csound
+kfmFreq1 = kfreq1 * kfmRatio
+amod1 oscili kfmIndex * kfmFreq1, kfmFreq1
+acar1 oscili kamp1, kfreq1 + amod1
+```
+
+* Basic FM: Carrier + Modulator, where:
+
+  * Modulator = oscillator (`amodN`)
+  * Carrier = oscillator modulated by `amodN`
+  * `kfmIndex` scales modulation depth
+  * `kfmRatio` adjusts the frequency of the modulator relative to the carrier
+
+### Microphone Input (Voice):
+
+```csound
+ain inch 1
+amic = ain*5
+```
+
+* Takes microphone input (scaled for gain).
+
+### PVOC Analysis (Vocoder):
+
+```csound
+fs_mod pvsanal amic, 1024, 256, 1024, 1
+fs_car pvsanal acar, 1024, 256, 1024, 1
+fs_morph pvsfilter fs_car, fs_mod, 1, 5
+```
+
+* `pvsanal`: Converts signals to phase vocoder spectra.
+* `pvsfilter`: Applies the spectral envelope of the modulator (`amic`) to the carrier (`acar`)—this is the vocoder effect.
+* `pvsynth`: Converts the processed spectrum back to audio.
+
+### Output Mixing:
+
+```csound
+amix = (aout*3 * kmix) + (acar * (1 - kmix))
+outs amix, amix
+```
+
+* Mixes vocoder output (`aout`) with clean FM signal (`acar`) using the mix control `kmix`.
+
+## How Csound.js Works
+
+### `csound.js` + WebAssembly
+
+* `csound.js` is a JavaScript wrapper for the Csound WebAssembly module.
+* Internally, it:
+
+  * Loads a `.wasm` version of Csound.
+  * Exposes functions like `compileOrc`, `start`, `setControlChannel`, and `inputMessage` for JavaScript control.
+  * Runs entirely in the browser—no audio server required.
+  * Enables real-time synthesis with low latency.
+
+## Summary
+
+This app is a browser-based FM synthesizer and vocoder, integrating:
+
+* Real-time microphone input and spectral morphing
+* FM synthesis with 3 voices
+* Dynamic control via touch (X/Y)
+* Tilt (device orientation) for FM parameters
+* All running in the browser with no plugins, thanks to Csound compiled to WebAssembly.
+
 

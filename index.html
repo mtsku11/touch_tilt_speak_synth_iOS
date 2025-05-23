@@ -1,8 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+ <html>
+  <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Touch Tilt FM Synth</title>
+  <title>Touch Tilt Speak FM Synth</title>
   <style>
     body {
       margin: 0;
@@ -14,7 +14,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       height: 100vh;
     }
     #xy-pad {
@@ -40,20 +40,29 @@
       vertical-align: middle;
     }
   </style>
-</head>
-<body>
-  <h2>🎛 Touch + Tilt FM Synth 🎛</h2>
+  </head>
+  <body>
+  <h2>🎛 Touch Tilt Speak FM Synth 🎛</h2>
+
+<p style="margin: 4px 0 12px 0; font-size: 0.9em;">Please wear headphones</p>
 
   <div id="starter" style="text-align:center; padding:20px;">
-    <button id="startAllBtn" style="padding: 16px 24px; font-size: 1.2em; border-radius: 8px;">▶️ Start Synth + Tilt</button>
+    <button id="startAllBtn" style="padding: 16px 24px; font-size: 1.2em; border-radius: 8px;">▶Start Synth</button>
     <p id="status" style="margin-top: 10px;">Waiting to start synth...</p>
 
-    <div style="margin-top: 20px;">
-      <label for="releaseSlider">Fast / Slow:</label>
-      <input id="releaseSlider" type="range" min="0.01" max="0.3" step="0.01" value="0.2" />
-      <span id="releaseValue">0.20</span>s
-    </div>
+   <div style="margin-top: 20px;">
+    <label for="releaseSlider">Fast / Slow:</label>
+    <input id="releaseSlider" type="range" min="0.01" max="0.3" step="0.01" value="0.2" />
+    <span id="releaseValue">0.20</span>
+   </div>
+
+    
+  <div style="margin-top: 20px;">
+    <label for="vocoderMixSlider">Vocoder Mix:</label>
+    <input id="vocoderMixSlider" type="range" min="0" max="1" step="0.01" value="1" />
+    <span id="vocoderMixValue">1.00</span>
   </div>
+
 
   <div id="xy-pad"></div>
 
@@ -87,6 +96,7 @@
       csound = await Csound();
 
       await csound.setOption("-odac");
+      await csound.setOption("-iadc");
       await csound.setOption("-b64");
       await csound.setOption("-B256");
 
@@ -98,6 +108,7 @@
 
         instr 1
           krelease chnget "releaseTime"
+          kmix chnget "vocoderMix"
 
           kamp1 = portk(chnget:k("amp1"), krelease)
           kfreq1 = portk(chnget:k("freq1"), krelease)
@@ -123,20 +134,27 @@
           amod3 oscili kfmIndex * kfmFreq3, kfmFreq3
           acar3 oscili kamp3, kfreq3 + amod3
 
-          apan1 random 0, 1
-          apan2 random 0, 1
-          apan3 random 0, 1
+          acar = (acar1 + acar2 + acar3)*0.3
 
-          aleft = acar1 * apan1 + acar2 * apan2 + acar3 * apan3
-          aright = acar1 * (1 - apan1) + acar2 * (1 - apan2) + acar3 * (1 - apan3)
+          ain inch 1
+          amic = ain*5
 
-          outs aleft * 0.3, aright * 0.3
+          fs_mod pvsanal amic, 1024, 256, 1024, 1
+          fs_car pvsanal acar, 1024, 256, 1024, 1
+          fs_morph pvsfilter fs_car, fs_mod, 1, 5
+          aout pvsynth fs_morph
+
+          amix = (aout*3 * kmix) + (acar * (1 - kmix))
+          outs amix, amix
+
         endin
       `);
       await csound.start();
       await startInstrument();
       const initialRelease = parseFloat(releaseSlider.value);
       csound.setControlChannel("releaseTime", initialRelease);
+      csound.setControlChannel("vocoderMix", parseFloat(vocoderMixSlider.value));
+
     }
 
     async function startInstrument() {
@@ -166,7 +184,7 @@
       return voiceMap[touchId];
     }
 
-    startAllBtn.addEventListener("click", async () => {
+     startAllBtn.addEventListener("click", async () => {
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         try {
           const response = await DeviceOrientationEvent.requestPermission();
@@ -188,7 +206,7 @@
       if (!csound) await initCsound();
       window.synthReady = true;
 
-      statusText.innerText = "Synth is running. Touch screen + tilt to play.";
+      statusText.innerText = "Touch, Tilt and Speak to play.";
       startAllBtn.style.display = "none";
     });
 
@@ -198,7 +216,19 @@
       if (csound) {
         csound.setControlChannel("releaseTime", value);
       }
+     });
+
+     const vocoderMixSlider = document.getElementById("vocoderMixSlider");
+     const vocoderMixValue = document.getElementById("vocoderMixValue");
+
+   vocoderMixSlider.addEventListener("input", () => {
+     const value = parseFloat(vocoderMixSlider.value);
+     vocoderMixValue.innerText = value.toFixed(2);
+     if (csound) {
+      csound.setControlChannel("vocoderMix", value);
+     }
     });
+
 
     pad.addEventListener("touchstart", handleTouch);
     pad.addEventListener("touchmove", handleTouch);
@@ -245,21 +275,21 @@
     }
 
    function handleTilt(e) {
-  const beta = e.beta || 0;
-  const gamma = e.gamma || 0;
+    const beta = e.beta || 0;
+    const gamma = e.gamma || 0;
 
-  const gammaNorm = Math.abs(gamma) / 90;
-  const betaNorm = (beta + 90) / 180;
-  const clampedBeta = Math.max(0, Math.min(betaNorm, 0.999));
+    const gammaNorm = Math.abs(gamma) / 90;
+    const betaNorm = (beta + 90) / 180;
+    const clampedBeta = Math.max(0, Math.min(betaNorm, 0.999));
 
-  const fmIndex = gammaNorm * 0.8;
-  const ratios = [0.5, 1, 1.5, 2, 3, 4];
-  const index = Math.floor(clampedBeta * ratios.length);
-  const fmRatio = ratios[index];
+    const fmIndex = gammaNorm * 0.8;
+    const ratios = [0.5, 1, 1.5, 2, 3, 4];
+    const index = Math.floor(clampedBeta * ratios.length);
+    const fmRatio = ratios[index];
 
-  csound?.setControlChannel("fmIndex", fmIndex);
-  csound?.setControlChannel("fmRatio", fmRatio);
-}
+    csound?.setControlChannel("fmIndex", fmIndex);
+    csound?.setControlChannel("fmRatio", fmRatio);
+   }
 
   </script>
 
