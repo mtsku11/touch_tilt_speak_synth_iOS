@@ -193,7 +193,7 @@
       return voiceMap[touchId];
     }
 
-     startAllBtn.addEventListener("click", async () => {
+
     // start everything on button click
     startAllBtn.addEventListener("click", async () => {
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
@@ -240,7 +240,6 @@
       csound.setControlChannel("vocoderMix", value);
      }
     });
-
 
     // touch listeners
     pad.addEventListener("touchstart", handleTouch);
@@ -289,9 +288,7 @@
       }
     }
 
-   function handleTilt(e) {
-    const beta = e.beta || 0;
-    const gamma = e.gamma || 0;
+
     // handle device tilt
   function handleTilt(e) {
   const beta = e.beta || 0;
